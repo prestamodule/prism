@@ -437,7 +437,7 @@ class Stream
     {
         $type = data_get($data, 'type', '');
 
-        return $type === 'response.reasoning_summary_text.delta';
+        return $type === 'response.reasoning_text.delta';
     }
 
     /**
@@ -445,7 +445,7 @@ class Stream
      */
     protected function extractReasoningSummaryDelta(array $data): string
     {
-        if (data_get($data, 'type') === 'response.reasoning_summary_text.delta') {
+        if (data_get($data, 'type') === 'response.reasoning_text.delta') {
             return (string) data_get($data, 'delta', '');
         }
 
