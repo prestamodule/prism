@@ -100,6 +100,9 @@ class Stream
                     timestamp: time(),
                     model: $data['response']['model'] ?? 'unknown',
                     provider: 'openai',
+                    metadata: [
+                        'response_id' => data_get($data, 'response.id'),
+                    ],
                 );
 
                 $this->state->markStreamStarted();
