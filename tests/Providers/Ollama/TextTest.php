@@ -7,10 +7,12 @@ namespace Tests\Providers\Ollama;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Prism\Prism\Enums\Provider;
+use Prism\Prism\Facades\Prism;
 use Prism\Prism\Facades\Tool;
-use Prism\Prism\Prism;
 use Prism\Prism\ValueObjects\Media\Image;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
+use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Tests\Fixtures\FixtureResponse;
 
@@ -94,6 +96,14 @@ describe('Text generation', function (): void {
         $firstStep = $response->steps[0];
         expect($firstStep->toolCalls)->toHaveCount(2);
 
+        // Verify the assistant message from step 1 is present in step 2's input messages
+        $secondStep = $response->steps[1];
+        expect($secondStep->messages)->toHaveCount(3);
+        expect($secondStep->messages[0])->toBeInstanceOf(UserMessage::class);
+        expect($secondStep->messages[1])->toBeInstanceOf(AssistantMessage::class);
+        expect($secondStep->messages[1]->toolCalls)->toHaveCount(2);
+        expect($secondStep->messages[2])->toBeInstanceOf(ToolResultMessage::class);
+
         expect($response->usage->promptTokens)->toBeNumeric()->toBeGreaterThan(0);
         expect($response->usage->completionTokens)->toBeNumeric()->toBeGreaterThan(0);
 
@@ -134,6 +144,60 @@ describe('Thinking parameter', function (): void {
         Http::assertSent(function (Request $request): true {
             $body = $request->data();
             expect($body)->not->toHaveKey('think');
+
+            return true;
+        });
+    });
+});
+
+describe('Keep alive parameter', function (): void {
+    it('includes keep_alive parameter when provided', function (): void {
+        FixtureResponse::fakeResponseSequence('api/chat', 'ollama/text-without-thinking');
+
+        Prism::text()
+            ->using('ollama', 'gpt-oss')
+            ->withPrompt('Test prompt')
+            ->withProviderOptions(['keep_alive' => '10m'])
+            ->asText();
+
+        Http::assertSent(function (Request $request): true {
+            $body = $request->data();
+            expect($body)->toHaveKey('keep_alive');
+            expect($body['keep_alive'])->toBe('10m');
+
+            return true;
+        });
+    });
+
+    it('supports numeric keep_alive values', function (): void {
+        FixtureResponse::fakeResponseSequence('api/chat', 'ollama/text-without-thinking');
+
+        Prism::text()
+            ->using('ollama', 'gpt-oss')
+            ->withPrompt('Test prompt')
+            ->withProviderOptions(['keep_alive' => 300])
+            ->asText();
+
+        Http::assertSent(function (Request $request): true {
+            $body = $request->data();
+            expect($body)->toHaveKey('keep_alive');
+            expect($body['keep_alive'])->toBe(300);
+
+            return true;
+        });
+    });
+
+    it('does not include keep_alive parameter when not provided', function (): void {
+        FixtureResponse::fakeResponseSequence('api/chat', 'ollama/text-without-thinking');
+
+        Prism::text()
+            ->using('ollama', 'gpt-oss')
+            ->withPrompt('Test prompt')
+            ->asText();
+
+        Http::assertSent(function (Request $request): true {
+            $body = $request->data();
+            expect($body)->not->toHaveKey('keep_alive');
 
             return true;
         });

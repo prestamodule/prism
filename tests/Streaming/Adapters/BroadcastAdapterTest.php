@@ -7,6 +7,7 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Support\Facades\Event;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Events\Broadcasting\ErrorBroadcast;
+use Prism\Prism\Events\Broadcasting\ProviderToolEventBroadcast;
 use Prism\Prism\Events\Broadcasting\StreamEndBroadcast;
 use Prism\Prism\Events\Broadcasting\StreamStartBroadcast;
 use Prism\Prism\Events\Broadcasting\TextCompleteBroadcast;
@@ -16,10 +17,13 @@ use Prism\Prism\Events\Broadcasting\ThinkingBroadcast;
 use Prism\Prism\Events\Broadcasting\ThinkingCompleteBroadcast;
 use Prism\Prism\Events\Broadcasting\ThinkingStartBroadcast;
 use Prism\Prism\Events\Broadcasting\ToolCallBroadcast;
+use Prism\Prism\Events\Broadcasting\ToolCallDeltaBroadcast;
 use Prism\Prism\Events\Broadcasting\ToolResultBroadcast;
 use Prism\Prism\Streaming\Adapters\BroadcastAdapter;
 use Prism\Prism\Streaming\Events\ErrorEvent;
+use Prism\Prism\Streaming\Events\ProviderToolEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
+use Prism\Prism\Streaming\Events\StreamEvent;
 use Prism\Prism\Streaming\Events\StreamStartEvent;
 use Prism\Prism\Streaming\Events\TextCompleteEvent;
 use Prism\Prism\Streaming\Events\TextDeltaEvent;
@@ -27,6 +31,7 @@ use Prism\Prism\Streaming\Events\TextStartEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
 use Prism\Prism\Streaming\Events\ThinkingEvent;
 use Prism\Prism\Streaming\Events\ThinkingStartEvent;
+use Prism\Prism\Streaming\Events\ToolCallDeltaEvent;
 use Prism\Prism\Streaming\Events\ToolCallEvent;
 use Prism\Prism\Streaming\Events\ToolResultEvent;
 use Prism\Prism\ValueObjects\ToolCall;
@@ -34,7 +39,7 @@ use Prism\Prism\ValueObjects\ToolResult;
 use Prism\Prism\ValueObjects\Usage;
 
 /**
- * @param  array<\Prism\Prism\Streaming\Events\StreamEvent>  $events
+ * @param  array<StreamEvent>  $events
  */
 function createBroadcastEventGenerator(array $events): Generator
 {
@@ -123,7 +128,8 @@ it('broadcasts thinking events correctly', function (): void {
 it('broadcasts tool events correctly', function (): void {
     $events = [
         new ToolCallEvent('evt-1', 1640995200, new ToolCall('tool-123', 'search', ['q' => 'test']), 'msg-456'),
-        new ToolResultEvent('evt-2', 1640995201, new ToolResult('tool-123', 'search', ['q' => 'test'], ['result' => 'found']), 'msg-456', true),
+        new ToolCallDeltaEvent('evt-2', 1640995201, 'tool-123', 'search', 'partial result', 'msg-456'),
+        new ToolResultEvent('evt-3', 1640995201, new ToolResult('tool-123', 'search', ['q' => 'test'], ['result' => 'found']), 'msg-456', true),
     ];
 
     $channel = new Channel('test-channel');
@@ -132,6 +138,8 @@ it('broadcasts tool events correctly', function (): void {
 
     Event::assertDispatched(ToolCallBroadcast::class, fn ($broadcastEvent): bool => $broadcastEvent->event->toolCall->name === 'search'
         && $broadcastEvent->event->toolCall->arguments() === ['q' => 'test']);
+
+    Event::assertDispatched(ToolCallDeltaBroadcast::class, fn ($broadcastEvent): bool => $broadcastEvent->event->delta === 'partial result');
 
     Event::assertDispatched(ToolResultBroadcast::class, fn ($broadcastEvent): bool => $broadcastEvent->event->toolResult->result === ['result' => 'found']
         && $broadcastEvent->event->success === true);
@@ -223,8 +231,9 @@ it('handles all supported event types without errors', function (): void {
         new ThinkingCompleteEvent('evt-7', 1640995206, 'reasoning-123'),
         new ToolCallEvent('evt-8', 1640995207, new ToolCall('tool-123', 'search', ['q' => 'test']), 'msg-456'),
         new ToolResultEvent('evt-9', 1640995208, new ToolResult('tool-123', 'search', ['q' => 'test'], ['result' => 'found']), 'msg-456', true),
-        new ErrorEvent('evt-10', 1640995209, 'test_error', 'Test error', true),
-        new StreamEndEvent('evt-11', 1640995210, FinishReason::Stop),
+        new ProviderToolEvent('evt-10', 1640995209, 'image_generation_call', 'completed', 'ig-789', ['result' => 'data']),
+        new ErrorEvent('evt-11', 1640995210, 'test_error', 'Test error', true),
+        new StreamEndEvent('evt-12', 1640995211, FinishReason::Stop),
     ];
 
     $channel = new Channel('test-channel');
@@ -306,6 +315,31 @@ it('validates broadcast event structure and data format', function (): void {
         expect($broadcastData['timestamp'])->toBe(1640995200);
         expect($broadcastData['delta'])->toBe('Hello world!');
         expect($broadcastData['message_id'])->toBe('msg-456');
+
+        return true;
+    });
+});
+
+it('broadcasts provider tool events correctly', function (): void {
+    $event = new ProviderToolEvent(
+        id: 'evt-123',
+        timestamp: 1640995200,
+        toolType: 'image_generation_call',
+        status: 'completed',
+        itemId: 'ig-456',
+        data: ['result' => 'base64-image-data']
+    );
+    $channel = new Channel('test-channel');
+
+    $adapter = new BroadcastAdapter($channel);
+    ($adapter)(createBroadcastEventGenerator([$event]));
+
+    Event::assertDispatched(ProviderToolEventBroadcast::class, function ($broadcastEvent): bool {
+        expect($broadcastEvent->broadcastAs())->toBe('provider_tool_event.image_generation_call.completed');
+        expect($broadcastEvent->event->toolType)->toBe('image_generation_call');
+        expect($broadcastEvent->event->status)->toBe('completed');
+        expect($broadcastEvent->event->itemId)->toBe('ig-456');
+        expect($broadcastEvent->event->data)->toBe(['result' => 'base64-image-data']);
 
         return true;
     });

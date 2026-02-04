@@ -20,6 +20,9 @@ use Prism\Prism\Providers\OpenAI\Maps\FinishReasonMap;
 use Prism\Prism\Providers\OpenAI\Maps\MessageMap;
 use Prism\Prism\Providers\OpenAI\Maps\ToolChoiceMap;
 use Prism\Prism\Streaming\EventID;
+use Prism\Prism\Streaming\Events\ProviderToolEvent;
+use Prism\Prism\Streaming\Events\StepFinishEvent;
+use Prism\Prism\Streaming\Events\StepStartEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
 use Prism\Prism\Streaming\Events\StreamEvent;
 use Prism\Prism\Streaming\Events\StreamStartEvent;
@@ -29,8 +32,8 @@ use Prism\Prism\Streaming\Events\TextStartEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
 use Prism\Prism\Streaming\Events\ThinkingEvent;
 use Prism\Prism\Streaming\Events\ThinkingStartEvent;
+use Prism\Prism\Streaming\Events\ToolCallDeltaEvent;
 use Prism\Prism\Streaming\Events\ToolCallEvent;
-use Prism\Prism\Streaming\Events\ToolResultEvent;
 use Prism\Prism\Streaming\StreamState;
 use Prism\Prism\Text\Request;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
@@ -114,6 +117,15 @@ class Stream
                 continue;
             }
 
+            if ($this->state->shouldEmitStepStart()) {
+                $this->state->markStepStarted();
+
+                yield new StepStartEvent(
+                    id: EventID::generate(),
+                    timestamp: time()
+                );
+            }
+
             if ($this->hasReasoningSummaryDelta($data)) {
                 $reasoningDelta = $this->extractReasoningSummaryDelta($data);
 
@@ -140,6 +152,24 @@ class Stream
                 continue;
             }
 
+            if (data_get($data, 'type') === 'response.output_item.done') {
+                $item = data_get($data, 'item', []);
+                $itemType = data_get($item, 'type', '');
+
+                if ($itemType !== 'function_call' && str_ends_with((string) $itemType, '_call')) {
+                    yield new ProviderToolEvent(
+                        id: EventID::generate(),
+                        timestamp: time(),
+                        toolType: $itemType,
+                        status: 'completed',
+                        itemId: data_get($item, 'id', ''),
+                        data: $item
+                    );
+
+                    continue;
+                }
+            }
+
             if ($this->hasReasoningItems($data)) {
                 $reasoningItems = $this->extractReasoningItems($data, $reasoningItems);
 
@@ -156,7 +186,11 @@ class Stream
             }
 
             if ($this->hasToolCalls($data)) {
-                $this->extractToolCalls($data, $reasoningItems);
+                $toolCallDeltaEvent = $this->extractToolCalls($data, $reasoningItems);
+
+                if ($toolCallDeltaEvent instanceof ToolCallDeltaEvent) {
+                    yield $toolCallDeltaEvent;
+                }
 
                 if ($this->isToolCallComplete($data)) {
                     $completedToolCall = $this->getCompletedToolCall($data);
@@ -171,6 +205,28 @@ class Stream
                 }
 
                 continue;
+            }
+
+            $type = (string) data_get($data, 'type', '');
+
+            if (str_starts_with($type, 'response.') && str_contains($type, '_call.')) {
+                $parts = explode('.', $type, 3);
+
+                if (count($parts) === 3 && str_ends_with($parts[1], '_call')) {
+                    $toolType = $parts[1];
+                    $status = $parts[2];
+
+                    yield new ProviderToolEvent(
+                        id: EventID::generate(),
+                        timestamp: time(),
+                        toolType: $toolType,
+                        status: $status,
+                        itemId: data_get($data, 'item_id', ''),
+                        data: $data
+                    );
+
+                    continue;
+                }
             }
 
             $content = $this->extractOutputTextDelta($data);
@@ -196,6 +252,8 @@ class Stream
             }
 
             if (data_get($data, 'type') === 'response.output_text.done' && $this->state->hasTextStarted()) {
+                $this->state->markTextCompleted();
+
                 yield new TextCompleteEvent(
                     id: EventID::generate(),
                     timestamp: time(),
@@ -204,26 +262,44 @@ class Stream
             }
 
             if (data_get($data, 'type') === 'response.completed') {
-                yield new StreamEndEvent(
-                    id: EventID::generate(),
-                    timestamp: time(),
-                    finishReason: $this->mapFinishReason($data),
-                    usage: new Usage(
-                        promptTokens: data_get($data, 'response.usage.input_tokens'),
-                        completionTokens: data_get($data, 'response.usage.output_tokens'),
-                        cacheReadInputTokens: data_get($data, 'response.usage.input_tokens_details.cached_tokens'),
-                        thoughtTokens: data_get($data, 'response.usage.output_tokens_details.reasoning_tokens')
-                    ),
-                    additionalContent: Arr::whereNotNull([
-                        'response_id' => data_get($data, 'response.id'),
-                    ])
-                );
+                $this->state->withFinishReason($this->mapFinishReason($data));
+                $this->state->addUsage(new Usage(
+                    promptTokens: data_get($data, 'response.usage.input_tokens'),
+                    completionTokens: data_get($data, 'response.usage.output_tokens'),
+                    cacheReadInputTokens: data_get($data, 'response.usage.input_tokens_details.cached_tokens'),
+                    thoughtTokens: data_get($data, 'response.usage.output_tokens_details.reasoning_tokens')
+                ));
+                $this->state->withMetadata(['response_id' => data_get($data, 'response.id')]);
             }
         }
 
         if ($this->state->hasToolCalls()) {
             yield from $this->handleToolCalls($request, $depth);
+
+            return;
         }
+
+        $this->state->markStepFinished();
+        yield new StepFinishEvent(
+            id: EventID::generate(),
+            timestamp: time()
+        );
+
+        yield $this->emitStreamEndEvent();
+    }
+
+    protected function emitStreamEndEvent(): StreamEndEvent
+    {
+        return new StreamEndEvent(
+            id: EventID::generate(),
+            timestamp: time(),
+            finishReason: $this->state->finishReason() ?? FinishReason::Stop,
+            usage: $this->state->usage() ?? new Usage(0, 0),
+            additionalContent: Arr::whereNotNull([
+                'response_id' => $this->state->metadata()['response_id'] ?? null,
+                'reasoningSummaries' => $this->state->thinkingSummaries() === [] ? null : $this->state->thinkingSummaries(),
+            ])
+        );
     }
 
     /**
@@ -254,7 +330,7 @@ class Stream
      * @param  array<string, mixed>  $data
      * @param  array<int, array<string, mixed>>  $reasoningItems
      */
-    protected function extractToolCalls(array $data, array $reasoningItems = []): void
+    protected function extractToolCalls(array $data, array $reasoningItems = []): ?ToolCallDeltaEvent
     {
         $type = data_get($data, 'type', '');
 
@@ -277,11 +353,29 @@ class Stream
 
             $this->state->addToolCall($index, $toolCall);
 
-            return;
+            return null;
         }
 
         if ($type === 'response.function_call_arguments.delta') {
-            // continue for now, only needed if we want to support streaming argument chunks
+            $callId = data_get($data, 'item_id');
+            $delta = data_get($data, 'delta', '');
+
+            $toolCalls = $this->state->toolCalls();
+            foreach ($toolCalls as $index => $call) {
+                if (($call['id'] ?? null) === $callId) {
+                    $currentArgs = $call['arguments'] ?? '';
+                    $this->state->updateToolCall($index, ['arguments' => $currentArgs.$delta]);
+
+                    return new ToolCallDeltaEvent(
+                        id: EventID::generate(),
+                        timestamp: time(),
+                        toolId: $call['id'],
+                        toolName: $call['name'],
+                        delta: $delta,
+                        messageId: $this->state->messageId()
+                    );
+                }
+            }
         }
 
         if ($type === 'response.function_call_arguments.done') {
@@ -298,6 +392,8 @@ class Stream
                 }
             }
         }
+
+        return null;
     }
 
     /**
@@ -306,19 +402,19 @@ class Stream
     protected function handleToolCalls(Request $request, int $depth): Generator
     {
         $mappedToolCalls = $this->mapToolCalls($this->state->toolCalls());
-        $toolResults = $this->callTools($request->tools(), $mappedToolCalls);
+        $toolResults = [];
+        yield from $this->callToolsAndYieldEvents($request->tools(), $mappedToolCalls, $this->state->messageId(), $toolResults);
 
-        foreach ($toolResults as $result) {
-            yield new ToolResultEvent(
-                id: EventID::generate(),
-                timestamp: time(),
-                toolResult: $result,
-                messageId: EventID::generate()
-            );
-        }
+        // Emit step finish after tool calls
+        $this->state->markStepFinished();
+        yield new StepFinishEvent(
+            id: EventID::generate(),
+            timestamp: time()
+        );
 
         $request->addMessage(new AssistantMessage($this->state->currentText(), $mappedToolCalls));
         $request->addMessage(new ToolResultMessage($toolResults));
+        $request->resetToolChoice();
 
         $depth++;
 
@@ -326,6 +422,8 @@ class Stream
             $nextResponse = $this->sendRequest($request);
 
             yield from $this->processStream($nextResponse, $request, $depth);
+        } else {
+            yield $this->emitStreamEndEvent();
         }
     }
 
@@ -346,7 +444,7 @@ class Stream
                 reasoningId: data_get($toolCall, 'reasoning_id'),
                 reasoningSummary: data_get($toolCall, 'reasoning_summary', []),
             ))
-            ->toArray();
+            ->all();
     }
 
     /**
@@ -473,7 +571,8 @@ class Stream
 
     protected function sendRequest(Request $request): Response
     {
-        return $this
+        /** @var Response $response */
+        $response = $this
             ->client
             ->withOptions(['stream' => true])
             ->post(
@@ -482,8 +581,8 @@ class Stream
                     'stream' => true,
                     'model' => $request->model(),
                     'input' => (new MessageMap($request->messages(), $request->systemPrompts()))(),
-                    'max_output_tokens' => $request->maxTokens(),
                 ], Arr::whereNotNull([
+                    'max_output_tokens' => $request->maxTokens(),
                     'temperature' => $request->temperature(),
                     'top_p' => $request->topP(),
                     'metadata' => $request->providerOptions('metadata'),
@@ -491,10 +590,16 @@ class Stream
                     'tool_choice' => ToolChoiceMap::map($request->toolChoice()),
                     'parallel_tool_calls' => $request->providerOptions('parallel_tool_calls'),
                     'previous_response_id' => $this->latestResponseId ?? $request->providerOptions('previous_response_id'),
+                    'service_tier' => $request->providerOptions('service_tier'),
+                    'text' => $request->providerOptions('text_verbosity') ? [
+                        'verbosity' => $request->providerOptions('text_verbosity'),
+                    ] : null,
                     'truncation' => $request->providerOptions('truncation'),
                     'reasoning' => $request->providerOptions('reasoning'),
                 ]))
             );
+
+        return $response;
     }
 
     protected function readLine(StreamInterface $stream): string
