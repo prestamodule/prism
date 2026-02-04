@@ -48,6 +48,8 @@ class Stream
 
     protected StreamState $state;
 
+    protected ?string $latestResponseId = null;
+
     public function __construct(protected PendingRequest $client)
     {
         $this->state = new StreamState;
@@ -95,13 +97,15 @@ class Stream
             }
 
             if ($data['type'] === 'response.created' && $this->state->shouldEmitStreamStart()) {
+                $this->latestResponseId = data_get($data, 'response.id');
+
                 yield new StreamStartEvent(
                     id: EventID::generate(),
                     timestamp: time(),
                     model: $data['response']['model'] ?? 'unknown',
                     provider: 'openai',
                     metadata: [
-                        'response_id' => data_get($data, 'response.id'),
+                        'response_id' => $this->latestResponseId,
                     ],
                 );
 
@@ -486,7 +490,7 @@ class Stream
                     'tools' => $this->buildTools($request),
                     'tool_choice' => ToolChoiceMap::map($request->toolChoice()),
                     'parallel_tool_calls' => $request->providerOptions('parallel_tool_calls'),
-                    'previous_response_id' => $request->providerOptions('previous_response_id'),
+                    'previous_response_id' => $this->latestResponseId ?? $request->providerOptions('previous_response_id'),
                     'truncation' => $request->providerOptions('truncation'),
                     'reasoning' => $request->providerOptions('reasoning'),
                 ]))
