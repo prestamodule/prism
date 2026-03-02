@@ -266,6 +266,7 @@ class Stream
                 $this->state->addUsage(new Usage(
                     promptTokens: data_get($data, 'response.usage.input_tokens'),
                     completionTokens: data_get($data, 'response.usage.output_tokens'),
+                    generationTokensPerSecond: data_get($data, 'response.usage.generation_tokens_per_second'),
                     cacheReadInputTokens: data_get($data, 'response.usage.input_tokens_details.cached_tokens'),
                     thoughtTokens: data_get($data, 'response.usage.output_tokens_details.reasoning_tokens')
                 ));
