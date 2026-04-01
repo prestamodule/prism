@@ -17,7 +17,7 @@ readonly class Usage implements Arrayable
         public ?int $cacheWriteInputTokens = null,
         public ?int $cacheReadInputTokens = null,
         public ?int $thoughtTokens = null,
-        public ?int $generationTokensPerSecond = null,
+        public ?float $generationTokensPerSecond = null,
     ) {}
 
     /**
