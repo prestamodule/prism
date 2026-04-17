@@ -34,6 +34,7 @@ use Prism\Prism\Streaming\Events\ThinkingEvent;
 use Prism\Prism\Streaming\Events\ThinkingStartEvent;
 use Prism\Prism\Streaming\Events\ToolCallDeltaEvent;
 use Prism\Prism\Streaming\Events\ToolCallEvent;
+use Prism\Prism\Streaming\Events\ToolCallStartedEvent;
 use Prism\Prism\Streaming\StreamState;
 use Prism\Prism\Text\Request;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
@@ -187,6 +188,20 @@ class Stream
 
             if ($this->hasToolCalls($data)) {
                 $toolCallDeltaEvent = $this->extractToolCalls($data, $reasoningItems);
+
+                if (
+                    data_get($data, 'type') === 'response.output_item.added'
+                    && data_get($data, 'item.type') === 'function_call'
+                ) {
+                    yield new ToolCallStartedEvent(
+                        id: EventID::generate(),
+                        timestamp: time(),
+                        toolId: data_get($data, 'item.id', ''),
+                        toolName: data_get($data, 'item.name', ''),
+                        toolCallResultId: data_get($data, 'item.call_id'),
+                        messageId: $this->state->messageId()
+                    );
+                }
 
                 if ($toolCallDeltaEvent instanceof ToolCallDeltaEvent) {
                     yield $toolCallDeltaEvent;

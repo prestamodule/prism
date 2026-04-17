@@ -21,6 +21,7 @@ use Prism\Prism\Streaming\Events\TextStartEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
 use Prism\Prism\Streaming\Events\ThinkingEvent;
 use Prism\Prism\Streaming\Events\ThinkingStartEvent;
+use Prism\Prism\Streaming\Events\ToolCallStartedEvent;
 use Prism\Prism\Streaming\Events\ToolCallEvent;
 use Prism\Prism\Streaming\Events\ToolResultEvent;
 use Prism\Prism\Text\PendingRequest;
@@ -135,6 +136,7 @@ class DataProtocolAdapter
             ThinkingStartEvent::class => $this->handleThinkingStart($event),
             ThinkingEvent::class => $this->handleThinkingDelta($event),
             ThinkingCompleteEvent::class => $this->handleThinkingComplete($event),
+            ToolCallStartedEvent::class => $this->handleToolCallStarted($event),
             ToolCallEvent::class => $this->handleToolCall($event),
             ToolResultEvent::class => $this->handleToolResult($event),
             ArtifactEvent::class => $this->handleArtifact($event),
@@ -234,6 +236,22 @@ class DataProtocolAdapter
         return [
             'type' => 'reasoning-end',
             'id' => $event->reasoningId,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function handleToolCallStarted(ToolCallStartedEvent $event): array
+    {
+        $this->startedToolCallIds[$event->toolId] = true;
+
+        return [
+            'type' => 'tool-input-started',
+            'toolCallId' => $event->toolId,
+            'toolName' => $event->toolName,
+            'toolCallResultId' => $event->toolCallResultId,
+            'input' => [],
         ];
     }
 
