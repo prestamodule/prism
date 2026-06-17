@@ -7,6 +7,9 @@ namespace Prism\Prism\Enums;
 enum StreamEventType: string
 {
     case StreamStart = 'stream_start';
+    case ResponseProcessingStart = 'response.processing.start';
+    case ResponseProcessingProgress = 'response.processing.progress';
+    case ResponseProcessingEnd = 'response.processing.end';
     case TextStart = 'text_start';
     case TextDelta = 'text_delta';
     case TextComplete = 'text_complete';

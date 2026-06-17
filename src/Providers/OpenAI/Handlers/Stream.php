@@ -21,6 +21,7 @@ use Prism\Prism\Providers\OpenAI\Maps\MessageMap;
 use Prism\Prism\Providers\OpenAI\Maps\ToolChoiceMap;
 use Prism\Prism\Streaming\EventID;
 use Prism\Prism\Streaming\Events\ProviderToolEvent;
+use Prism\Prism\Streaming\Events\ResponseProcessingEvent;
 use Prism\Prism\Streaming\Events\StepFinishEvent;
 use Prism\Prism\Streaming\Events\StepStartEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
@@ -114,6 +115,24 @@ class Stream
                 );
 
                 $this->state->markStreamStarted();
+
+                continue;
+            }
+
+            if ($this->isResponseProcessingEvent($data)) {
+                $requestId = data_get($data, 'request_id');
+                $sequenceNumber = data_get($data, 'sequence_number');
+                $progress = data_get($data, 'progress');
+
+                yield new ResponseProcessingEvent(
+                    id: EventID::generate(),
+                    timestamp: time(),
+                    eventName: (string) data_get($data, 'type'),
+                    requestId: is_string($requestId) ? $requestId : null,
+                    sequenceNumber: is_int($sequenceNumber) ? $sequenceNumber : null,
+                    progress: is_int($progress) || is_float($progress) ? $progress : null,
+                    data: $data,
+                );
 
                 continue;
             }
@@ -281,9 +300,9 @@ class Stream
                 $this->state->addUsage(new Usage(
                     promptTokens: data_get($data, 'response.usage.input_tokens'),
                     completionTokens: data_get($data, 'response.usage.output_tokens'),
-                    generationTokensPerSecond: data_get($data, 'response.usage.generation_tokens_per_second'),
                     cacheReadInputTokens: data_get($data, 'response.usage.input_tokens_details.cached_tokens'),
-                    thoughtTokens: data_get($data, 'response.usage.output_tokens_details.reasoning_tokens')
+                    thoughtTokens: data_get($data, 'response.usage.output_tokens_details.reasoning_tokens'),
+                    generationTokensPerSecond: data_get($data, 'response.usage.generation_tokens_per_second')
                 ));
                 $this->state->withMetadata(['response_id' => data_get($data, 'response.id')]);
             }
@@ -478,6 +497,18 @@ class Stream
             'response.function_call_arguments.delta',
             'response.function_call_arguments.done',
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected function isResponseProcessingEvent(array $data): bool
+    {
+        return in_array(data_get($data, 'type'), [
+            'response.processing.start',
+            'response.processing.progress',
+            'response.processing.end',
+        ], true);
     }
 
     /**

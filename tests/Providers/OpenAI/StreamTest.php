@@ -11,6 +11,7 @@ use Prism\Prism\Exceptions\PrismException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Facades\Tool;
 use Prism\Prism\Streaming\Events\ProviderToolEvent;
+use Prism\Prism\Streaming\Events\ResponseProcessingEvent;
 use Prism\Prism\Streaming\Events\StepFinishEvent;
 use Prism\Prism\Streaming\Events\StepStartEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
@@ -66,6 +67,55 @@ it('can generate text with a basic stream', function (): void {
         return $request->url() === 'https://api.openai.com/v1/responses'
             && $body['stream'] === true;
     });
+});
+
+it('emits response processing lifecycle events without adding them to output', function (): void {
+    FixtureResponse::fakeResponseSequence('v1/responses', 'openai/stream-with-processing-events');
+
+    $response = Prism::text()
+        ->using('openai', 'gpt-4o')
+        ->withPrompt('Who are you?')
+        ->asStream();
+
+    $events = [];
+    $processingEvents = [];
+    $text = '';
+    $reasoning = '';
+    $toolArgumentDeltas = '';
+
+    foreach ($response as $event) {
+        $events[] = $event;
+
+        if ($event instanceof ResponseProcessingEvent) {
+            $processingEvents[] = $event;
+        }
+
+        if ($event instanceof TextDeltaEvent) {
+            $text .= $event->delta;
+        }
+
+        if ($event instanceof ThinkingEvent) {
+            $reasoning .= $event->delta;
+        }
+
+        if ($event instanceof ToolCallDeltaEvent) {
+            $toolArgumentDeltas .= $event->delta;
+        }
+    }
+
+    expect($processingEvents)->toHaveCount(3);
+    expect(array_map(fn (ResponseProcessingEvent $event): string => $event->eventName, $processingEvents))->toBe([
+        'response.processing.start',
+        'response.processing.progress',
+        'response.processing.end',
+    ]);
+    expect($processingEvents[1]->progress)->toBe(42);
+    expect($text)->toBe('Hello.');
+    expect($reasoning)->toBe('');
+    expect($toolArgumentDeltas)->toBe('');
+
+    $streamEndEvents = array_filter($events, fn (StreamEvent $event): bool => $event instanceof StreamEndEvent);
+    expect($streamEndEvents)->toHaveCount(1);
 });
 
 it('can generate text using tools with streaming', function (): void {

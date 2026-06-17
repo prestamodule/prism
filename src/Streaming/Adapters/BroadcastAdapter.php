@@ -12,6 +12,7 @@ use InvalidArgumentException;
 use Prism\Prism\Events\Broadcasting\ArtifactBroadcast;
 use Prism\Prism\Events\Broadcasting\ErrorBroadcast;
 use Prism\Prism\Events\Broadcasting\ProviderToolEventBroadcast;
+use Prism\Prism\Events\Broadcasting\ResponseProcessingBroadcast;
 use Prism\Prism\Events\Broadcasting\StepFinishBroadcast;
 use Prism\Prism\Events\Broadcasting\StepStartBroadcast;
 use Prism\Prism\Events\Broadcasting\StreamEndBroadcast;
@@ -29,6 +30,7 @@ use Prism\Prism\Events\Broadcasting\ToolResultBroadcast;
 use Prism\Prism\Streaming\Events\ArtifactEvent;
 use Prism\Prism\Streaming\Events\ErrorEvent;
 use Prism\Prism\Streaming\Events\ProviderToolEvent;
+use Prism\Prism\Streaming\Events\ResponseProcessingEvent;
 use Prism\Prism\Streaming\Events\StepFinishEvent;
 use Prism\Prism\Streaming\Events\StepStartEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
@@ -90,6 +92,7 @@ class BroadcastAdapter
             ToolResultEvent::class => new ToolResultBroadcast($event, $this->channels),
             ArtifactEvent::class => new ArtifactBroadcast($event, $this->channels),
             ProviderToolEvent::class => new ProviderToolEventBroadcast($event, $this->channels),
+            ResponseProcessingEvent::class => new ResponseProcessingBroadcast($event, $this->channels),
             ErrorEvent::class => new ErrorBroadcast($event, $this->channels),
             StepFinishEvent::class => new StepFinishBroadcast($event, $this->channels),
             StreamEndEvent::class => new StreamEndBroadcast($event, $this->channels),
