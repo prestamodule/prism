@@ -32,7 +32,7 @@ readonly class Usage implements Arrayable
             'cache_write_input_tokens' => $this->cacheWriteInputTokens,
             'cache_read_input_tokens' => $this->cacheReadInputTokens,
             'thought_tokens' => $this->thoughtTokens,
-            'generation_tokens_per_second' => $this->$generationTokensPerSecond,
+            'generation_tokens_per_second' => $this->generationTokensPerSecond,
         ];
     }
 }
