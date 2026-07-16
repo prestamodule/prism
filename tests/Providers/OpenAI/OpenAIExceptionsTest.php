@@ -75,7 +75,7 @@ test('text unknown finish reason exception includes the raw openai status and ty
         ->asText();
 })->throws(
     PrismException::class,
-    'OpenAI: unknown finish reason (status: backend_finished, type: backend_message)'
+    'OpenAI: unhandled finish reason "unknown" (status: backend_finished, type: backend_message)'
 );
 
 test('structured unknown finish reason exception includes the raw openai status and type', function (): void {
@@ -101,5 +101,5 @@ test('structured unknown finish reason exception includes the raw openai status 
         ->asStructured();
 })->throws(
     PrismException::class,
-    'OpenAI: unknown finish reason (status: backend_finished, type: backend_message)'
+    'OpenAI: unhandled finish reason "unknown" (status: backend_finished, type: backend_message)'
 );
