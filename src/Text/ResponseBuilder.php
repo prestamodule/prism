@@ -6,6 +6,7 @@ namespace Prism\Prism\Text;
 
 use Illuminate\Support\Collection;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\Usage;
 
 readonly class ResponseBuilder
@@ -77,6 +78,11 @@ readonly class ResponseBuilder
             thoughtTokens: $this->steps->contains(fn (Step $result): bool => $result->usage->thoughtTokens !== null)
                 ? $this->steps->sum(fn (Step $result): int => $result->usage->thoughtTokens ?? 0)
                 : null,
+            speculativeDecoding: SpeculativeDecodingUsage::aggregate(
+                $this->steps
+                    ->map(fn (Step $result): ?SpeculativeDecodingUsage => $result->usage->speculativeDecoding)
+                    ->all()
+            ),
         );
     }
 }

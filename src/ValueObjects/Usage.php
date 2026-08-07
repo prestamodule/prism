@@ -18,6 +18,7 @@ readonly class Usage implements Arrayable
         public ?int $cacheReadInputTokens = null,
         public ?int $thoughtTokens = null,
         public ?float $generationTokensPerSecond = null,
+        public ?SpeculativeDecodingUsage $speculativeDecoding = null,
     ) {}
 
     /**
@@ -33,6 +34,9 @@ readonly class Usage implements Arrayable
             'cache_read_input_tokens' => $this->cacheReadInputTokens,
             'thought_tokens' => $this->thoughtTokens,
             'generation_tokens_per_second' => $this->generationTokensPerSecond,
+            ...($this->speculativeDecoding instanceof SpeculativeDecodingUsage
+                ? ['speculative_decoding' => $this->speculativeDecoding->toArray()]
+                : []),
         ];
     }
 }

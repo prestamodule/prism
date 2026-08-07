@@ -8,6 +8,7 @@ use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Enums\StreamEventType;
 use Prism\Prism\ValueObjects\Citation;
 use Prism\Prism\ValueObjects\MessagePartWithCitations;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\Usage;
 
 readonly class StreamEndEvent extends StreamEvent
@@ -48,6 +49,9 @@ readonly class StreamEndEvent extends StreamEvent
                 'cache_write_input_tokens' => $this->usage->cacheWriteInputTokens,
                 'cache_read_input_tokens' => $this->usage->cacheReadInputTokens,
                 'thought_tokens' => $this->usage->thoughtTokens,
+                ...($this->usage->speculativeDecoding instanceof SpeculativeDecodingUsage
+                    ? ['speculative_decoding' => $this->usage->speculativeDecoding->toArray()]
+                    : []),
             ] : null,
             'citations' => $this->citations !== null ? array_map(
                 fn (MessagePartWithCitations $citationPart): array => [

@@ -7,6 +7,7 @@ namespace Prism\Prism\Structured;
 use Illuminate\Support\Collection;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Exceptions\PrismStructuredDecodingException;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 use Prism\Prism\ValueObjects\Usage;
@@ -123,6 +124,11 @@ readonly class ResponseBuilder
             thoughtTokens: $this->steps->contains(fn (Step $result): bool => $result->usage->thoughtTokens !== null)
                 ? $this->steps->sum(fn (Step $result): int => $result->usage->thoughtTokens ?? 0)
                 : null,
+            speculativeDecoding: SpeculativeDecodingUsage::aggregate(
+                $this->steps
+                    ->map(fn (Step $result): ?SpeculativeDecodingUsage => $result->usage->speculativeDecoding)
+                    ->all()
+            ),
         );
     }
 }

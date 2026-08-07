@@ -18,6 +18,7 @@ use Prism\Prism\Providers\OpenAI\Concerns\BuildsTools;
 use Prism\Prism\Providers\OpenAI\Concerns\ProcessRateLimits;
 use Prism\Prism\Providers\OpenAI\Maps\FinishReasonMap;
 use Prism\Prism\Providers\OpenAI\Maps\MessageMap;
+use Prism\Prism\Providers\OpenAI\Maps\SpeculativeDecodingUsageMapper;
 use Prism\Prism\Providers\OpenAI\Maps\ToolChoiceMap;
 use Prism\Prism\Streaming\EventID;
 use Prism\Prism\Streaming\Events\ProviderToolEvent;
@@ -302,7 +303,10 @@ class Stream
                     completionTokens: data_get($data, 'response.usage.output_tokens'),
                     cacheReadInputTokens: data_get($data, 'response.usage.input_tokens_details.cached_tokens'),
                     thoughtTokens: data_get($data, 'response.usage.output_tokens_details.reasoning_tokens'),
-                    generationTokensPerSecond: data_get($data, 'response.usage.generation_tokens_per_second')
+                    generationTokensPerSecond: data_get($data, 'response.usage.generation_tokens_per_second'),
+                    speculativeDecoding: SpeculativeDecodingUsageMapper::map(
+                        data_get($data, 'response.usage.speculative_decoding')
+                    ),
                 ));
                 $this->state->withMetadata(['response_id' => data_get($data, 'response.id')]);
             }

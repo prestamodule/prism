@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Streaming\StreamState;
 use Prism\Prism\ValueObjects\MessagePartWithCitations;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\Usage;
 
 it('constructs with default empty state', function (): void {
@@ -396,6 +397,26 @@ it('withUsage returns self', function (): void {
     $result = $state->withUsage($usage);
 
     expect($result)->toBe($state);
+});
+
+it('addUsage aggregates speculative decoding counters', function (): void {
+    $state = new StreamState;
+    $state->withUsage(new Usage(
+        promptTokens: 10,
+        completionTokens: 5,
+        speculativeDecoding: SpeculativeDecodingUsage::fromCounters('mtp', 4, 12, 9),
+    ));
+
+    $state->addUsage(new Usage(
+        promptTokens: 5,
+        completionTokens: 3,
+        speculativeDecoding: SpeculativeDecodingUsage::fromCounters('mtp', 2, 4, 1),
+    ));
+
+    expect($state->usage()?->speculativeDecoding?->draftRounds)->toBe(6)
+        ->and($state->usage()?->speculativeDecoding?->draftTokens)->toBe(16)
+        ->and($state->usage()?->speculativeDecoding?->acceptedDraftTokens)->toBe(10)
+        ->and($state->usage()?->speculativeDecoding?->draftAcceptanceRate)->toBe(0.625);
 });
 
 it('withFinishReason stores FinishReason enum', function (): void {

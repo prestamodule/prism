@@ -6,6 +6,7 @@ namespace Prism\Prism\Streaming;
 
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\ValueObjects\MessagePartWithCitations;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\Usage;
 
 class StreamState
@@ -238,7 +239,11 @@ class StreamState
             completionTokens: $this->usage->completionTokens + $usage->completionTokens,
             cacheWriteInputTokens: ($this->usage->cacheWriteInputTokens ?? 0) + ($usage->cacheWriteInputTokens ?? 0),
             cacheReadInputTokens: ($this->usage->cacheReadInputTokens ?? 0) + ($usage->cacheReadInputTokens ?? 0),
-            thoughtTokens: ($this->usage->thoughtTokens ?? 0) + ($usage->thoughtTokens ?? 0)
+            thoughtTokens: ($this->usage->thoughtTokens ?? 0) + ($usage->thoughtTokens ?? 0),
+            speculativeDecoding: SpeculativeDecodingUsage::aggregate([
+                $this->usage->speculativeDecoding,
+                $usage->speculativeDecoding,
+            ]),
         );
 
         return $this;

@@ -529,6 +529,29 @@ it('emits usage information', function (): void {
     }
 });
 
+it('emits speculative decoding usage information when provided', function (): void {
+    FixtureResponse::fakeResponseSequence('v1/responses', 'openai/stream-speculative-usage');
+
+    $response = Prism::text()
+        ->using('openai', 'test-model')
+        ->withPrompt('Who are you?')
+        ->asStream();
+
+    $usage = null;
+    foreach ($response as $event) {
+        if ($event instanceof StreamEndEvent) {
+            $usage = $event->usage;
+        }
+    }
+
+    expect($usage?->speculativeDecoding)->not->toBeNull()
+        ->and($usage?->speculativeDecoding?->draftKind)->toBe('mtp')
+        ->and($usage?->speculativeDecoding?->draftRounds)->toBe(4)
+        ->and($usage?->speculativeDecoding?->draftTokens)->toBe(12)
+        ->and($usage?->speculativeDecoding?->acceptedDraftTokens)->toBe(9)
+        ->and($usage?->speculativeDecoding?->draftAcceptanceRate)->toBe(0.75);
+});
+
 it('can accept falsy parameters', function (): void {
     FixtureResponse::fakeResponseSequence('v1/responses', 'openai/stream-falsy-argument-conversation-responses');
 

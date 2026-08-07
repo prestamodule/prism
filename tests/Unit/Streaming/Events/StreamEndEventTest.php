@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Enums\StreamEventType;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\Usage;
 
 it('constructs with required parameters', function (): void {
@@ -127,6 +128,29 @@ it('converts to array with partial usage information', function (): void {
             'thought_tokens' => null,
         ],
         'citations' => null,
+    ]);
+});
+
+it('converts speculative decoding usage to an array when present', function (): void {
+    $event = new StreamEndEvent(
+        id: 'event-123',
+        timestamp: 1640995200,
+        finishReason: FinishReason::Stop,
+        usage: new Usage(
+            promptTokens: 100,
+            completionTokens: 50,
+            speculativeDecoding: SpeculativeDecodingUsage::fromCounters('mtp', 4, 12, 9),
+        ),
+    );
+
+    expect($event->toArray()['usage']['speculative_decoding'])->toBe([
+        'draft_kind' => 'mtp',
+        'draft_rounds' => 4,
+        'draft_n' => 12,
+        'draft_n_accepted' => 9,
+        'draft_acceptance_rate' => 0.75,
+        'draft_accepted_per_round' => 2.25,
+        'tokens_per_verification_round' => 3.25,
     ]);
 });
 

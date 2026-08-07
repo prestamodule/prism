@@ -17,6 +17,7 @@ use Prism\Prism\Providers\OpenAI\Concerns\ProcessRateLimits;
 use Prism\Prism\Providers\OpenAI\Concerns\ValidatesResponse;
 use Prism\Prism\Providers\OpenAI\Maps\MessageMap;
 use Prism\Prism\Providers\OpenAI\Maps\ProviderToolCallMap;
+use Prism\Prism\Providers\OpenAI\Maps\SpeculativeDecodingUsageMapper;
 use Prism\Prism\Providers\OpenAI\Maps\ToolCallMap;
 use Prism\Prism\Providers\OpenAI\Maps\ToolChoiceMap;
 use Prism\Prism\Text\Request;
@@ -170,6 +171,9 @@ class Text
                 completionTokens: data_get($data, 'usage.output_tokens'),
                 cacheReadInputTokens: data_get($data, 'usage.input_tokens_details.cached_tokens'),
                 thoughtTokens: data_get($data, 'usage.output_tokens_details.reasoning_tokens'),
+                speculativeDecoding: SpeculativeDecodingUsageMapper::map(
+                    data_get($data, 'usage.speculative_decoding')
+                ),
             ),
             meta: new Meta(
                 id: data_get($data, 'id'),

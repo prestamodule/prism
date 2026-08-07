@@ -21,10 +21,11 @@ use Prism\Prism\Streaming\Events\TextStartEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
 use Prism\Prism\Streaming\Events\ThinkingEvent;
 use Prism\Prism\Streaming\Events\ThinkingStartEvent;
-use Prism\Prism\Streaming\Events\ToolCallStartedEvent;
 use Prism\Prism\Streaming\Events\ToolCallEvent;
+use Prism\Prism\Streaming\Events\ToolCallStartedEvent;
 use Prism\Prism\Streaming\Events\ToolResultEvent;
 use Prism\Prism\Text\PendingRequest;
+use Prism\Prism\ValueObjects\SpeculativeDecodingUsage;
 use Prism\Prism\ValueObjects\Usage;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -381,6 +382,9 @@ class DataProtocolAdapter
             $messageMetadata['usage'] = [
                 'promptTokens' => $event->usage->promptTokens,
                 'completionTokens' => $event->usage->completionTokens,
+                ...($event->usage->speculativeDecoding instanceof SpeculativeDecodingUsage
+                    ? ['speculativeDecoding' => $event->usage->speculativeDecoding->toArray()]
+                    : []),
             ];
         }
 
