@@ -785,9 +785,8 @@ class Stream
      */
     protected function hasReasoningSummaryDelta(array $data): bool
     {
-        $type = data_get($data, 'type', '');
-
-        return $type === 'response.reasoning_text.delta';
+        // Raw reasoning text (open-weight models) and reasoning summaries (OpenAI reasoning models)
+        return in_array(data_get($data, 'type', ''), ['response.reasoning_text.delta', 'response.reasoning_summary_text.delta'], true);
     }
 
     /**
@@ -795,7 +794,7 @@ class Stream
      */
     protected function extractReasoningSummaryDelta(array $data): string
     {
-        if (data_get($data, 'type') === 'response.reasoning_text.delta') {
+        if ($this->hasReasoningSummaryDelta($data)) {
             return (string) data_get($data, 'delta', '');
         }
 
