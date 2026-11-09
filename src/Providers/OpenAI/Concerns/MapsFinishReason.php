@@ -57,28 +57,4 @@ trait MapsFinishReason
         return $finishReason === FinishReason::Length
             && data_get($data, 'incomplete_details.reason') !== 'max_messages';
     }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    protected function unknownFinishReasonMessage(array $data): string
-    {
-        return vsprintf('OpenAI: unknown finish reason (status: %s, type: %s)', [
-            $this->stringifyFinishReasonValue(data_get($data, 'output.{last}.status')),
-            $this->stringifyFinishReasonValue(data_get($data, 'output.{last}.type')),
-        ]);
-    }
-
-    protected function stringifyFinishReasonValue(mixed $value): string
-    {
-        if ($value === null || $value === '') {
-            return 'missing';
-        }
-
-        if (is_scalar($value)) {
-            return (string) $value;
-        }
-
-        return json_encode($value) ?: get_debug_type($value);
-    }
 }
