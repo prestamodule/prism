@@ -139,6 +139,33 @@ it('maps assistant message with tool calls', function (): void {
     ]]);
 });
 
+it('maps assistant message with tool calls with empty arguments as json object', function (): void {
+    $messageMap = new MessageMap(
+        messages: [
+            new AssistantMessage('', [
+                new ToolCall(
+                    'tool_1234',
+                    'get_schema',
+                    []
+                ),
+            ]),
+        ],
+        systemPrompts: []
+    );
+
+    expect($messageMap())->toBe([[
+        'role' => 'assistant',
+        'tool_calls' => [[
+            'id' => 'tool_1234',
+            'type' => 'function',
+            'function' => [
+                'name' => 'get_schema',
+                'arguments' => '{}',
+            ],
+        ]],
+    ]]);
+});
+
 it('maps tool result messages', function (): void {
     $messageMap = new MessageMap(
         messages: [
@@ -188,4 +215,29 @@ it('maps system prompt', function (): void {
             ],
         ],
     ]);
+});
+
+describe('content that is exactly "0"', function (): void {
+    it('keeps an assistant message of "0"', function (): void {
+        $messageMap = new MessageMap(
+            messages: [new AssistantMessage('0')],
+            systemPrompts: []
+        );
+
+        expect($messageMap())->toBe([[
+            'role' => 'assistant',
+            'content' => '0',
+        ]]);
+    });
+
+    it('still leaves the content of an empty assistant message out', function (): void {
+        $messageMap = new MessageMap(
+            messages: [new AssistantMessage('')],
+            systemPrompts: []
+        );
+
+        expect($messageMap())->toBe([[
+            'role' => 'assistant',
+        ]]);
+    });
 });

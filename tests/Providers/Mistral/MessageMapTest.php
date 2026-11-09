@@ -99,6 +99,33 @@ it('maps assistant message with tool calls', function (): void {
     ]]);
 });
 
+it('maps assistant message with tool calls with empty arguments as json object', function (): void {
+    $messageMap = new MessageMap(
+        messages: [
+            new AssistantMessage('', [
+                new ToolCall(
+                    'tool_1234',
+                    'get_schema',
+                    []
+                ),
+            ]),
+        ],
+        systemPrompts: []
+    );
+
+    expect($messageMap())->toBe([[
+        'role' => 'assistant',
+        'tool_calls' => [[
+            'id' => 'tool_1234',
+            'type' => 'function',
+            'function' => [
+                'name' => 'get_schema',
+                'arguments' => '{}',
+            ],
+        ]],
+    ]]);
+});
+
 it('maps tool result messages', function (): void {
     $messageMap = new MessageMap(
         messages: [
@@ -182,4 +209,29 @@ it('throws an exception for a non-url document', function (): void {
     );
 
     $messageMap();
-})->throws(PrismException::class, "The mistral provider does not support the mediums available in the provided `Prism\Prism\Providers\Mistral\Maps\DocumentMapper`. Pleae consult the Prism documentation for more information on which mediums the mistral provider supports.");
+})->throws(PrismException::class, "The mistral provider does not support the mediums available in the provided `Prism\Prism\Providers\Mistral\Maps\DocumentMapper`. Please consult the Prism documentation for more information on which mediums the mistral provider supports.");
+
+describe('content that is exactly "0"', function (): void {
+    it('keeps an assistant message of "0"', function (): void {
+        $messageMap = new MessageMap(
+            messages: [new AssistantMessage('0')],
+            systemPrompts: []
+        );
+
+        expect($messageMap())->toBe([[
+            'role' => 'assistant',
+            'content' => '0',
+        ]]);
+    });
+
+    it('still leaves the content of an empty assistant message out', function (): void {
+        $messageMap = new MessageMap(
+            messages: [new AssistantMessage('')],
+            systemPrompts: []
+        );
+
+        expect($messageMap())->toBe([[
+            'role' => 'assistant',
+        ]]);
+    });
+});

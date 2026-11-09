@@ -13,7 +13,7 @@ use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 
-it('maps user messages', function (): void {
+it('maps user messages as plain string when no images', function (): void {
     $messageMap = new MessageMap(
         messages: [
             new UserMessage('Who are you?'),
@@ -23,9 +23,7 @@ it('maps user messages', function (): void {
 
     expect($messageMap())->toBe([[
         'role' => 'user',
-        'content' => [
-            ['type' => 'text', 'text' => 'Who are you?'],
-        ],
+        'content' => 'Who are you?',
     ]]);
 });
 
@@ -75,6 +73,33 @@ it('maps assistant message with tool calls', function (): void {
     ]]);
 });
 
+it('maps assistant message with tool calls with empty arguments as json object', function (): void {
+    $messageMap = new MessageMap(
+        messages: [
+            new AssistantMessage('', [
+                new ToolCall(
+                    'tool_1234',
+                    'get_schema',
+                    []
+                ),
+            ]),
+        ],
+        systemPrompts: []
+    );
+
+    expect($messageMap())->toBe([[
+        'role' => 'assistant',
+        'tool_calls' => [[
+            'id' => 'tool_1234',
+            'type' => 'function',
+            'function' => [
+                'name' => 'get_schema',
+                'arguments' => '{}',
+            ],
+        ]],
+    ]]);
+});
+
 it('maps tool result messages', function (): void {
     $messageMap = new MessageMap(
         messages: [
@@ -119,9 +144,7 @@ it('maps system prompt', function (): void {
         ],
         [
             'role' => 'user',
-            'content' => [
-                ['type' => 'text', 'text' => 'Who are you?'],
-            ],
+            'content' => 'Who are you?',
         ],
     ]);
 });
@@ -196,4 +219,29 @@ it('maps user messages with images from url', function (): void {
             ],
         ],
     ]]);
+});
+
+describe('content that is exactly "0"', function (): void {
+    it('keeps an assistant message of "0"', function (): void {
+        $messageMap = new MessageMap(
+            messages: [new AssistantMessage('0')],
+            systemPrompts: []
+        );
+
+        expect($messageMap())->toBe([[
+            'role' => 'assistant',
+            'content' => '0',
+        ]]);
+    });
+
+    it('still leaves the content of an empty assistant message out', function (): void {
+        $messageMap = new MessageMap(
+            messages: [new AssistantMessage('')],
+            systemPrompts: []
+        );
+
+        expect($messageMap())->toBe([[
+            'role' => 'assistant',
+        ]]);
+    });
 });

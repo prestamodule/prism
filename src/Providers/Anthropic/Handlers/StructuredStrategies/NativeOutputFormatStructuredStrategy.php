@@ -20,10 +20,12 @@ class NativeOutputFormatStructuredStrategy extends AnthropicStructuredStrategy
     {
         $schemaArray = $this->request->schema()->toArray();
 
-        $payload['output_format'] = [
-            'type' => 'json_schema',
-            'schema' => $schemaArray,
-        ];
+        $payload['output_config'] = array_merge($payload['output_config'] ?? [], [
+            'format' => [
+                'type' => 'json_schema',
+                'schema' => $schemaArray,
+            ],
+        ]);
 
         return $payload;
     }
