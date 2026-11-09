@@ -105,9 +105,12 @@ class Stream
                 ));
             }
 
-            if ($data['type'] === 'response.created' && $this->state->shouldEmitStreamStart()) {
-                $this->latestResponseId = data_get($data, 'response.id');
+            // Every step creates a new response: the next step continues from the latest one
+            if ($data['type'] === 'response.created') {
+                $this->latestResponseId = data_get($data, 'response.id') ?? $this->latestResponseId;
+            }
 
+            if ($data['type'] === 'response.created' && $this->state->shouldEmitStreamStart()) {
                 yield new StreamStartEvent(
                     id: EventID::generate(),
                     timestamp: time(),

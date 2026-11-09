@@ -318,6 +318,45 @@ it('can process a complete conversation with multiple tool calls for reasoning m
     Http::assertSentCount(3);
 });
 
+it('continues each step from the previous response id', function (): void {
+    FixtureResponse::fakeResponseSequence('v1/responses', 'openai/stream-multi-tool-conversation-responses-reasoning');
+    $tools = [
+        Tool::as('weather')
+            ->for('Get weather information')
+            ->withStringParameter('city', 'City name')
+            ->using(fn (string $city): string => "The weather in {$city} is 75° and sunny."),
+
+        Tool::as('search')
+            ->for('Search for information')
+            ->withStringParameter('query', 'The search query')
+            ->using(fn (string $query): string => 'Tigers game is at 3pm in Detroit today.'),
+    ];
+
+    $response = Prism::text()
+        ->using('openai', 'o3-mini')
+        ->withTools($tools)
+        ->withMaxSteps(5)
+        ->withPrompt('What time is the Tigers game today and should I wear a coat in Detroit?')
+        ->asStream();
+
+    foreach ($response as $event) {
+        // Consume the stream
+    }
+
+    $previousResponseIds = [];
+    Http::assertSent(function (Request $request) use (&$previousResponseIds): bool {
+        $previousResponseIds[] = $request->data()['previous_response_id'] ?? null;
+
+        return true;
+    });
+
+    expect($previousResponseIds)->toBe([
+        null,
+        'resp_6859a4ba39a8819aa8e4e70ad75e77af0a7ba57447365234',
+        'resp_6859a4c15e8c819a99a89381882f30e30a7ba57447365234',
+    ]);
+});
+
 it('can process a complete conversation with multiple tool calls for reasoning models that require past reasoning', function (): void {
     FixtureResponse::fakeResponseSequence('v1/responses', 'openai/stream-multi-tool-conversation-responses-reasoning-past-reasoning');
     $tools = [
